@@ -1,0 +1,6 @@
+bridge/.venv/
+bridge/.venv-nemo/
+bridge/models/
+__pycache__/
+*.pyc
+.DS_Store
