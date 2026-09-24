@@ -313,6 +313,7 @@ class Bridge:
         self.demo = demo
         self.demo_intervall = demo_intervall
         self.demo_nasta = 0.0
+        self.demo_arbetar = False
         self.link = link
         self.recorder = recorder
         self.transcriber = transcriber
@@ -364,21 +365,34 @@ class Bridge:
         Transkriberingen tar ungefär lika lång tid oavsett ljudlängd, så att
         köra om den växande frasen några gånger per sekund är billigt. Texten
         får vara fel — skärmen byter ut den, till skillnad från tangentbordet.
+
+        Arbetet sker i en egen tråd: huvudloopen måste fortsätta tömma
+        inspelaren, annars tappas ljud och dikteringen blir trög. Bara ett
+        anrop åt gången, annars köar de upp sig bakom modellen.
         """
         nu = time.monotonic()
-        if nu < self.demo_nasta:
+        if nu < self.demo_nasta or self.demo_arbetar:
             return
         self.demo_nasta = nu + self.demo_intervall
         pcm = self.seg.pagaende()
         if len(pcm) < self.recorder.rate:          # under en halv sekund: för lite
             return
-        try:
-            text = clean_dictation_text(
-                self.transcriber.transcribe(wav_bytes(pcm, self.recorder.rate)))
-        except Exception:                          # noqa: BLE001
-            return                                 # demot får aldrig störa dikteringen
-        if text:
-            self.demo.preliminar(text)
+
+        self.demo_arbetar = True
+        rate = self.recorder.rate
+
+        def jobb():
+            try:
+                text = clean_dictation_text(
+                    self.transcriber.transcribe(wav_bytes(pcm, rate)))
+                if text:
+                    self.demo.preliminar(text)
+            except Exception:                      # noqa: BLE001
+                pass                               # demot får aldrig störa dikteringen
+            finally:
+                self.demo_arbetar = False
+
+        threading.Thread(target=jobb, daemon=True).start()
 
     def drain(self):
         """Väntar tills alla köade fraser är klara (tester och avslut)."""

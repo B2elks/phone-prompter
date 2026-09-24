@@ -60,34 +60,44 @@ body {
   min-height: 1.3em;
 }
 
-/* Ett enda rörelseuttryck: ordet landar mjukt och knäpper till när det
-   är säkert. Rörelsen betyder "nu ändras det inte mer". */
+/* Ett fysiskt uttryck genom hela skärmen: ett osäkert ord är hett och löst
+   — det glöder och sitter glest. När frasen är fastställd slocknar glöden
+   och bokstäverna knäpper ihop. Rörelsen bär betydelsen, den dekorerar inte. */
 .ord {
   display: inline-block;
   margin-right: .26em;
+  white-space: pre;
   color: var(--preliminar);
-  letter-spacing: .045em;
-  opacity: 0;
-  animation: land .3s cubic-bezier(.2, .7, .3, 1) forwards;
+  letter-spacing: .05em;
+  text-shadow: 0 0 .32em rgba(0, 229, 255, .55);
+  transition: color .2s ease, letter-spacing .34s cubic-bezier(.34, 1.56, .3, 1),
+              text-shadow .3s ease;
 }
-@keyframes land {
-  from { opacity: 0; filter: blur(6px); transform: translateY(.14em); }
+
+/* Bokstäverna kaskadar in i stället för att hela ordet dyker upp på en gång. */
+.tkn {
+  display: inline-block;
+  opacity: 0;
+  animation: tkn-in .34s cubic-bezier(.2, .8, .25, 1) forwards;
+}
+@keyframes tkn-in {
+  from { opacity: 0; filter: blur(8px); transform: translateY(.22em) scaleX(.7); }
+  60%  { opacity: 1; }
   to   { opacity: 1; filter: blur(0);   transform: none; }
 }
+
+/* Fastställt: glöden slocknar och spärren dras ihop med en fjädring. */
 .ord.fast {
   color: var(--fast);
-  letter-spacing: -0.02em;
-  filter: none;
-  opacity: 1;
-  transform: none;
-  animation: none;
-  transition: color .18s ease, letter-spacing .22s cubic-bezier(.2,.7,.3,1),
-              filter .18s ease;
+  letter-spacing: -0.025em;
+  text-shadow: none;
 }
-.ord.rattad { animation: ratta .5s ease forwards; }
+
+/* Ett ord som ersatte ett annat blinkar gult innan det lägger sig. */
+.ord.rattad { animation: ratta .55s ease forwards; }
 @keyframes ratta {
-  0%   { color: var(--rattad); filter: blur(0); opacity: 1; transform: none; }
-  100% { color: var(--fast);   filter: blur(0); opacity: 1; transform: none; }
+  0%   { color: var(--rattad); text-shadow: 0 0 .5em rgba(255, 214, 0, .7); }
+  100% { color: var(--preliminar); text-shadow: 0 0 .32em rgba(0, 229, 255, .55); }
 }
 
 /* Tomt läge. En svart skärm går inte att skilja från en trasig sida. */
@@ -124,7 +134,7 @@ body {
 #lage[data-lyssnar="ja"] #prick { background: var(--preliminar); }
 
 @media (prefers-reduced-motion: reduce) {
-  .ord, .ord.fast, .ord.rattad {
+  .ord, .ord.fast, .ord.rattad, .tkn {
     animation: none;
     transition: none;
     opacity: 1;
@@ -171,7 +181,14 @@ function rita(ord, fastslagen) {
   for (let i = gemensam; i < ord.length; i++) {
     const s = document.createElement("span");
     s.className = "ord";
-    s.textContent = ord[i];
+    // Varje tecken får sin egen fördröjning så ordet rullar in.
+    [...ord[i]].forEach((tecken, j) => {
+      const t = document.createElement("span");
+      t.className = "tkn";
+      t.textContent = tecken;
+      t.style.animationDelay = (j * 26) + "ms";
+      s.appendChild(t);
+    });
     // Ett ord som ersätter ett annat markeras som rättat.
     if (i < visade.length && visade[i] !== ord[i]) s.classList.add("rattad");
     aktuell.appendChild(s);

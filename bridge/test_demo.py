@@ -182,3 +182,71 @@ class MenyradsDemoTest(unittest.TestCase):
         self.mb.save_demo(True)
         self.assertEqual(self.mb.load_language(), "en")
         self.assertEqual(self.mb.load_kalla(), "telefon")
+
+
+class PreliminarTradTest(unittest.TestCase):
+    """Preliminär transkribering får aldrig blockera huvudloopen.
+
+    poll() måste fortsätta tömma inspelaren medan modellen arbetar, annars
+    tappas ljud och hela bryggan känns trög.
+    """
+
+    def bygg(self, fordrojning=0.4):
+        import time
+        import ptt_bridge as pb
+
+        class Långsam:
+            def __init__(s): s.anrop = 0
+            def transcribe(s, wav):
+                s.anrop += 1
+                time.sleep(fordrojning)
+                return "halv mening"
+
+        class Inspelare:
+            rate = 8000
+            def take(s): return b""
+            def start(s): pass
+            def stop(s): pass
+
+        class Skärm:
+            def __init__(s): s.texter = []
+            def preliminar(s, t): s.texter.append(t)
+            def slutlig(s, t): pass
+            def lage(s, *a, **k): pass
+
+        class Länk:
+            def send(s, rad): pass
+
+        modell, skarm = Långsam(), Skärm()
+        b = pb.Bridge(link=Länk(), recorder=Inspelare(), transcriber=modell,
+                      typer=type("T", (), {"type": lambda s, t: None})(),
+                      log=lambda *a: None, sounds=False, demo=skarm)
+        # Lägg ljud i den pågående frasen: en sekund räcker över tröskeln
+        b.seg.seg = [b"\x30\x30" * 400 for _ in range(30)]
+        return b, modell, skarm
+
+    def test_returnerar_innan_modellen_ar_klar(self):
+        import time
+        b, modell, skarm = self.bygg()
+        t0 = time.monotonic()
+        b._demo_preliminar()
+        gick = time.monotonic() - t0
+        self.assertLess(gick, 0.15, f"blockerade {gick:.2f} s på transkriberingen")
+
+    def test_texten_nar_skarmen_nar_modellen_blir_klar(self):
+        import time
+        b, modell, skarm = self.bygg(fordrojning=0.1)
+        b._demo_preliminar()
+        time.sleep(0.5)
+        self.assertEqual(modell.anrop, 1)
+        self.assertEqual(skarm.texter, ["halv mening"])
+
+    def test_inget_nytt_anrop_medan_ett_pagar(self):
+        # Annars köar sig anropen och modellen blir flaskhals.
+        import time
+        b, modell, skarm = self.bygg(fordrojning=0.4)
+        b._demo_preliminar()
+        b.demo_nasta = 0.0            # tiden är inte hindret vi provar
+        b._demo_preliminar()
+        time.sleep(0.7)
+        self.assertEqual(modell.anrop, 1, "startade ett andra anrop för tidigt")
