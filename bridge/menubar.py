@@ -88,6 +88,15 @@ def save_motor(motor):
     _skriv_installning("motor", motor)
 
 
+def load_demo():
+    """Om demoskärmen ska startas med bryggan. Av som standard."""
+    return _las_installningar().get("demo", False) is True
+
+
+def save_demo(pa):
+    _skriv_installning("demo", bool(pa))
+
+
 def load_kalla():
     """Ljudkälla: "pico" (USB-micken) eller "telefon" (multicast-paging).
 
@@ -169,6 +178,8 @@ def bryggans_argument(kalla, language):
     # att avsluta direkt, och övervakaren startar om den i en loop.
     if load_motor() == "pianissimo" and language == "sv":
         args += ["--engine", "pianissimo"]
+    if load_demo():
+        args.append("--demo")
     return args
 
 
@@ -192,6 +203,7 @@ def main():
             self.language = load_language()
             self.kalla = load_kalla()
             self.motor = load_motor()
+            self.demo = load_demo()
             self.in_call = False
             self.restart_pending = False
             self.language_menu = rumps.MenuItem(tr("Transkriberingsspråk"))
@@ -215,13 +227,15 @@ def main():
                 item.state = kod == self.motor
                 self.motor_items[kod] = item
                 self.motor_menu.add(item)
+            self.demo_item = rumps.MenuItem(tr("Demoskärm"), callback=self.toggle_demo)
+            self.demo_item.state = self.demo
             self.status_item = rumps.MenuItem(tr("Ingen telefon"))
             self.text_item = rumps.MenuItem(tr("Senaste: ") + "–")
             self.pause_item = rumps.MenuItem(tr("Pausa"), callback=self.toggle_pause)
             self.login_item = rumps.MenuItem(tr("Starta vid inloggning"), callback=self.toggle_login)
             self.login_item.state = os.path.exists(PLIST)
             self.menu = [self.status_item, self.text_item, None, self.pause_item, self.kalla_menu,
-                         self.motor_menu, self.language_menu, self.login_item,
+                         self.motor_menu, self.language_menu, self.demo_item, self.login_item,
                          rumps.MenuItem(tr("Behörigheter och hjälp…"), callback=self.help),
                          rumps.MenuItem(tr("Öppna logg"), callback=lambda _: subprocess.run(["open", LOG])),
                          None, rumps.MenuItem(tr("Avsluta Phone Prompter"), callback=self.quit)]
@@ -333,6 +347,16 @@ def main():
                 item.state = kod == kalla
             # Bryggan måste startas om: flaggan sätts bara vid start.
             self.restart_pending = True
+
+        def toggle_demo(self, item):
+            self.demo = not self.demo
+            save_demo(self.demo)
+            item.state = self.demo
+            self.restart_pending = True
+            if self.demo:
+                # Adressen är värdelös om man inte får veta den.
+                rumps.notification("Phone Prompter", tr("Demoskärm"),
+                                   "http://127.0.0.1:8790")
 
         def change_motor(self, motor):
             if motor == self.motor:

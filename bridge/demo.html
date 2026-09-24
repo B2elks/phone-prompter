@@ -32,7 +32,7 @@ html, body {
 
 body {
   display: grid;
-  grid-template-rows: 1fr auto auto;
+  grid-template-rows: 1fr auto auto auto;
   padding: 4vh 5vw 0;
 }
 
@@ -90,6 +90,17 @@ body {
   100% { color: var(--fast);   filter: blur(0); opacity: 1; transform: none; }
 }
 
+/* Tomt läge. En svart skärm går inte att skilja från en trasig sida. */
+#tomt {
+  margin: 0;
+  padding: 0 0 3vh;
+  font-size: clamp(1rem, 1.9vw, 1.6rem);
+  font-weight: 400;
+  color: #7a7a7a;
+  max-width: 40ch;
+}
+#tomt[hidden] { display: none; }
+
 #status {
   border-top: 1px solid var(--rad);
   padding: 1.1rem 0 1.4rem;
@@ -127,6 +138,7 @@ body {
 
 <div id="historik"></div>
 <div id="aktuell" aria-live="polite"></div>
+<p id="tomt">Lyft luren och prata. Orden dyker upp här.</p>
 
 <div id="status">
   <span id="lage" data-lyssnar="nej"><span id="prick"></span>väntar på ljud</span>
@@ -140,6 +152,11 @@ const lage = document.getElementById("lage");
 const kalla = document.getElementById("kalla");
 
 let visade = [];   // orden som redan står på skärmen
+const tomt = document.getElementById("tomt");
+
+function visa_tomt_lage() {
+  tomt.hidden = aktuell.children.length > 0 || historik.children.length > 0;
+}
 
 /** Ritar om frasen men rör inte ord som redan landat — annars skulle
  *  varje uppdatering starta om alla animationer. */
@@ -160,6 +177,7 @@ function rita(ord, fastslagen) {
     aktuell.appendChild(s);
   }
   visade = ord.slice();
+  visa_tomt_lage();
 
   if (fastslagen) {
     [...aktuell.children].forEach((s, i) => {
@@ -178,6 +196,7 @@ function arkivera(text) {
   }
   aktuell.replaceChildren();
   visade = [];
+  visa_tomt_lage();
 }
 
 const strom = new EventSource("/handelser");

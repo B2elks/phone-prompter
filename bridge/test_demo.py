@@ -141,3 +141,44 @@ class AteruppspelningTest(unittest.TestCase):
         self.skarm.slutlig("förra frasen")
         self.skarm.lage(True)
         self.assertIsNone(self.skarm.senaste_text)
+
+
+class MenyradsDemoTest(unittest.TestCase):
+    """Demot måste gå att slå på där bryggan faktiskt startas.
+
+    Menyradsappen startar ptt_bridge.py; utan ett val där kan demot bara
+    nås genom att köra bryggan för hand, och då slåss två bryggor om
+    mikrofonen.
+    """
+
+    def setUp(self):
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        import menubar as mb
+        self.mb = mb
+        self.kat = tempfile.TemporaryDirectory()
+        self.p = patch.object(mb, "SETTINGS", str(Path(self.kat.name) / "s.json"))
+        self.p.start()
+
+    def tearDown(self):
+        self.p.stop()
+        self.kat.cleanup()
+
+    def test_av_som_standard(self):
+        self.assertFalse(self.mb.load_demo())
+
+    def test_gar_att_sla_pa(self):
+        self.mb.save_demo(True)
+        self.assertTrue(self.mb.load_demo())
+        self.assertIn("--demo", self.mb.bryggans_argument("pico", "sv"))
+
+    def test_flaggan_uteblir_nar_av(self):
+        self.assertNotIn("--demo", self.mb.bryggans_argument("pico", "sv"))
+
+    def test_raderar_inte_ovriga_installningar(self):
+        self.mb.save_language("en")
+        self.mb.save_kalla("telefon")
+        self.mb.save_demo(True)
+        self.assertEqual(self.mb.load_language(), "en")
+        self.assertEqual(self.mb.load_kalla(), "telefon")

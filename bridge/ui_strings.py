@@ -5,6 +5,7 @@ STRINGS = {
     "Ingen telefon": ("Ingen telefon", "No phone connected"),
     "Ljudkälla": ("Ljudkälla", "Audio source"),
     "Transkribering": ("Transkribering", "Transcription"),
+    "Demoskärm": ("Demoskärm", "Demo screen"),
     "Whisper": ("Whisper", "Whisper"),
     "Pianissimo (sv)": ("Pianissimo (sv)", "Pianissimo (sv)"),
     "Pico-mick": ("Pico-mick", "Pico mic"),
