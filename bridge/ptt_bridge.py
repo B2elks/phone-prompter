@@ -151,6 +151,28 @@ def parse_inference_json(body: bytes) -> str:
     return json.loads(body.decode("utf-8")).get("text", "")
 
 
+# Platser att leta på när PATH är avskalad. En app som startas från Finder
+# ärver inte skalets PATH, så Homebrew syns inte.
+BINARPLATSER = ("/opt/homebrew/bin", "/usr/local/bin", "/opt/local/bin")
+
+
+def hitta_binar(namn):
+    """Full sökväg till ett program, även utan Homebrew i PATH.
+
+    Hittas det inte återlämnas namnet som det är, så felet från Popen
+    visar kommandot i stället för att dölja vad som saknades.
+    """
+    import shutil
+    traff = shutil.which(namn)
+    if traff:
+        return traff
+    for katalog in BINARPLATSER:
+        kandidat = os.path.join(katalog, namn)
+        if os.path.exists(kandidat):
+            return kandidat
+    return namn
+
+
 def valj_transkriberare(args, log=print):
     """Transkriberare enligt --engine. Startar inget förrän den används."""
     if getattr(args, "engine", "whisper") == "pianissimo":
@@ -564,7 +586,7 @@ class WhisperServer(HttpTranskriberare):
         if self._alive():
             self.log(f"whisper-server svarar redan på :{self.port}")
             return self
-        cmd = [self.binary, "-m", self.model, "-l", self.language, "-t", str(self.threads),
+        cmd = [hitta_binar(self.binary), "-m", self.model, "-l", self.language, "-t", str(self.threads),
                "--host", "127.0.0.1", "--port", str(self.port), "--convert", "--tmp-dir", "/tmp", "-nt"]
         self.proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         for _ in range(600):

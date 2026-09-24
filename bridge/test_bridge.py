@@ -501,3 +501,36 @@ class MaxlangdTest(unittest.TestCase):
         ut += seg.push(blk(3, 500))        # paus över min_silence
         self.assertEqual(len(ut), 1, "pausen klippte inte")
         self.assertLess(len(ut[0]) / 2 / rate, 2.0, "segmentet växte till maxlängden")
+
+
+class BinarSokvagTest(unittest.TestCase):
+    """whisper-server måste hittas även utan Homebrew i PATH.
+
+    En app som startas från Finder får PATH=/usr/bin:/bin:/usr/sbin:/sbin,
+    och /opt/homebrew/bin saknas. Felet låg latent tills språket byttes:
+    den nya porten hade ingen server igång, bryggan försökte starta en och
+    kraschade med FileNotFoundError.
+    """
+
+    def test_hittar_via_path_nar_den_finns(self):
+        import shutil
+        from unittest.mock import patch
+        with patch.object(shutil, "which", return_value="/nagonstans/whisper-server"):
+            self.assertEqual(pb.hitta_binar("whisper-server"), "/nagonstans/whisper-server")
+
+    def test_faller_tillbaka_pa_kanda_platser(self):
+        import shutil
+        from unittest.mock import patch
+        import os
+        with patch.object(shutil, "which", return_value=None), \
+             patch.object(os.path, "exists", lambda p: p == "/opt/homebrew/bin/whisper-server"):
+            self.assertEqual(pb.hitta_binar("whisper-server"),
+                             "/opt/homebrew/bin/whisper-server")
+
+    def test_ger_namnet_tillbaka_om_inget_hittas(self):
+        # Då får felmeddelandet från Popen tala, med kommandot synligt.
+        import shutil, os
+        from unittest.mock import patch
+        with patch.object(shutil, "which", return_value=None), \
+             patch.object(os.path, "exists", lambda p: False):
+            self.assertEqual(pb.hitta_binar("whisper-server"), "whisper-server")
