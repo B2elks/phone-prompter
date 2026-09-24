@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phone Prompter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* Svensk text-TV:s disciplin: rena mättade färger på äkta svart, där
+   färgen bär information i stället för att dekorera. */
+:root {
+  --botten: #000000;
+  --fast: #ffffff;        /* ordet är fastställt */
+  --preliminar: #00e5ff;  /* kan fortfarande ändras */
+  --rattad: #ffd600;      /* ändrades nyss */
+  --historik: #3a3a3a;
+  --rad: #1a1a1a;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--botten);
+  color: var(--fast);
+  font-family: "Familjen Grotesk", system-ui, sans-serif;
+  overflow: hidden;
+}
+
+body {
+  display: grid;
+  grid-template-rows: 1fr auto auto;
+  padding: 4vh 5vw 0;
+}
+
+/* Tidigare fraser glider uppåt och tonar bort — de är sagda, inte borta. */
+#historik {
+  align-self: end;
+  overflow: hidden;
+  font-size: clamp(.95rem, 1.6vw, 1.45rem);
+  font-weight: 400;
+  line-height: 1.45;
+  color: var(--historik);
+  max-width: 46ch;
+  mask-image: linear-gradient(to bottom, transparent, #000 45%);
+}
+#historik p { margin: 0 0 .5em; }
+
+/* Den aktuella frasen är skärmens enda riktiga tyngdpunkt. */
+#aktuell {
+  font-size: clamp(2rem, 5vw, 4.6rem);
+  font-weight: 700;
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  max-width: 26ch;
+  padding: 3vh 0 3vh;
+  min-height: 1.3em;
+}
+
+/* Ett enda rörelseuttryck: ordet landar mjukt och knäpper till när det
+   är säkert. Rörelsen betyder "nu ändras det inte mer". */
+.ord {
+  display: inline-block;
+  margin-right: .26em;
+  color: var(--preliminar);
+  letter-spacing: .045em;
+  opacity: 0;
+  animation: land .3s cubic-bezier(.2, .7, .3, 1) forwards;
+}
+@keyframes land {
+  from { opacity: 0; filter: blur(6px); transform: translateY(.14em); }
+  to   { opacity: 1; filter: blur(0);   transform: none; }
+}
+.ord.fast {
+  color: var(--fast);
+  letter-spacing: -0.02em;
+  filter: none;
+  opacity: 1;
+  transform: none;
+  animation: none;
+  transition: color .18s ease, letter-spacing .22s cubic-bezier(.2,.7,.3,1),
+              filter .18s ease;
+}
+.ord.rattad { animation: ratta .5s ease forwards; }
+@keyframes ratta {
+  0%   { color: var(--rattad); filter: blur(0); opacity: 1; transform: none; }
+  100% { color: var(--fast);   filter: blur(0); opacity: 1; transform: none; }
+}
+
+#status {
+  border-top: 1px solid var(--rad);
+  padding: 1.1rem 0 1.4rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: .82rem;
+  font-weight: 500;
+  color: #6b6b6b;
+}
+#lage { color: var(--fast); }
+#lage[data-lyssnar="nej"] { color: #6b6b6b; }
+#prick {
+  display: inline-block;
+  width: .5em; height: .5em;
+  border-radius: 50%;
+  background: #333;
+  margin-right: .55em;
+  vertical-align: baseline;
+}
+#lage[data-lyssnar="ja"] #prick { background: var(--preliminar); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ord, .ord.fast, .ord.rattad {
+    animation: none;
+    transition: none;
+    opacity: 1;
+    filter: none;
+    transform: none;
+  }
+}
+</style>
+</head>
+<body>
+
+<div id="historik"></div>
+<div id="aktuell" aria-live="polite"></div>
+
+<div id="status">
+  <span id="lage" data-lyssnar="nej"><span id="prick"></span>väntar på ljud</span>
+  <span id="kalla"></span>
+</div>
+
+<script>
+const aktuell = document.getElementById("aktuell");
+const historik = document.getElementById("historik");
+const lage = document.getElementById("lage");
+const kalla = document.getElementById("kalla");
+
+let visade = [];   // orden som redan står på skärmen
+
+/** Ritar om frasen men rör inte ord som redan landat — annars skulle
+ *  varje uppdatering starta om alla animationer. */
+function rita(ord, fastslagen) {
+  let gemensam = 0;
+  while (gemensam < ord.length && gemensam < visade.length &&
+         ord[gemensam] === visade[gemensam]) gemensam++;
+
+  // Ord som ändrades tas bort; de var preliminära och blev något annat.
+  while (aktuell.children.length > gemensam) aktuell.lastChild.remove();
+
+  for (let i = gemensam; i < ord.length; i++) {
+    const s = document.createElement("span");
+    s.className = "ord";
+    s.textContent = ord[i];
+    // Ett ord som ersätter ett annat markeras som rättat.
+    if (i < visade.length && visade[i] !== ord[i]) s.classList.add("rattad");
+    aktuell.appendChild(s);
+  }
+  visade = ord.slice();
+
+  if (fastslagen) {
+    [...aktuell.children].forEach((s, i) => {
+      setTimeout(() => s.classList.add("fast"), i * 45);
+    });
+  }
+}
+
+function arkivera(text) {
+  if (text) {
+    const p = document.createElement("p");
+    p.textContent = text;
+    historik.appendChild(p);
+    while (historik.children.length > 6) historik.firstChild.remove();
+    historik.scrollTop = historik.scrollHeight;
+  }
+  aktuell.replaceChildren();
+  visade = [];
+}
+
+const strom = new EventSource("/handelser");
+
+strom.addEventListener("preliminar", e => {
+  rita(JSON.parse(e.data).text.split(/\s+/).filter(Boolean), false);
+});
+
+strom.addEventListener("slutlig", e => {
+  const text = JSON.parse(e.data).text;
+  rita(text.split(/\s+/).filter(Boolean), true);
+  setTimeout(() => arkivera(text), 1400);
+});
+
+strom.addEventListener("lage", e => {
+  const d = JSON.parse(e.data);
+  lage.dataset.lyssnar = d.lyssnar ? "ja" : "nej";
+  lage.lastChild.textContent = d.lyssnar ? "lyssnar" : "väntar på ljud";
+  if (d.kalla) kalla.textContent = d.kalla;
+});
+
+strom.onerror = () => {
+  lage.dataset.lyssnar = "nej";
+  lage.lastChild.textContent = "ingen kontakt med bryggan";
+};
+</script>
+</body>
+</html>

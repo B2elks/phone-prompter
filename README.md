@@ -50,6 +50,20 @@ python3 ptt_bridge.py --multicast --multicast-kalla 192.168.1.215
 Testad med Panasonic KX-HDV230. Telefonen behöver `MPAGE_*`-inställningarna
 satta till en multicast-adress och PCMA som codec.
 
+## Demoskärm
+
+```bash
+python3 ptt_bridge.py --demo
+```
+
+Öppna `http://127.0.0.1:8790` — det du säger dyker upp som levande undertext,
+ord för ord. Preliminära ord är cyanfärgade och luftigt satta; när frasen är
+klar knäpper de till i vitt. Rörelsen betyder att ordet inte ändras mer.
+
+Skärmen visar preliminär text medan du fortfarande talar. Det vore farligt
+att *knappa in* sådan text — ett fel ord går inte att ta tillbaka — men en
+skärm kan byta ut ett ord utan att något går förlorat.
+
 ## Transkriberare
 
 **KB-Whisper** (standard) via whisper.cpp. Snabb och träffsäker på svenska.

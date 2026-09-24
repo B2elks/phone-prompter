@@ -286,6 +286,14 @@ class Segmenter:
         self.longest_silence = 0
         return b"".join(seg) if ok else None
 
+    def pagaende(self):
+        """Ljudet i frasen som just nu byggs, utan att ändra tillståndet.
+
+        Demoskärmen transkriberar detta medan man talar för att visa
+        preliminär text. Bufferten får inte konsumeras — frasen är inte klar.
+        """
+        return b"".join(self.seg)
+
     def flush(self):
         if self.tail and self.seg:
             self.seg.append(self.tail)
@@ -298,9 +306,13 @@ class Bridge:
     """Tillståndsmaskin: rader från Pico in, fraser ut via arbetstråd."""
 
     def __init__(self, link, recorder, transcriber, typer, trailing_space=True, log=print,
-                 sounds=True, segmenter=None, enter_on_hangup=True, trim_tail_ms=400):
+                 sounds=True, segmenter=None, enter_on_hangup=True, trim_tail_ms=400,
+                 demo=None, demo_intervall=0.5):
         self.enter_on_hangup = enter_on_hangup
         self.trim_tail_ms = trim_tail_ms
+        self.demo = demo
+        self.demo_intervall = demo_intervall
+        self.demo_nasta = 0.0
         self.link = link
         self.recorder = recorder
         self.transcriber = transcriber
@@ -343,10 +355,38 @@ class Bridge:
         if pcm:
             for segment in self.seg.push(pcm):
                 self._enqueue(segment)
+        if self.demo:
+            self._demo_preliminar()
+
+    def _demo_preliminar(self):
+        """Visar halvfärdig text på demoskärmen medan frasen pågår.
+
+        Transkriberingen tar ungefär lika lång tid oavsett ljudlängd, så att
+        köra om den växande frasen några gånger per sekund är billigt. Texten
+        får vara fel — skärmen byter ut den, till skillnad från tangentbordet.
+        """
+        nu = time.monotonic()
+        if nu < self.demo_nasta:
+            return
+        self.demo_nasta = nu + self.demo_intervall
+        pcm = self.seg.pagaende()
+        if len(pcm) < self.recorder.rate:          # under en halv sekund: för lite
+            return
+        try:
+            text = clean_dictation_text(
+                self.transcriber.transcribe(wav_bytes(pcm, self.recorder.rate)))
+        except Exception:                          # noqa: BLE001
+            return                                 # demot får aldrig störa dikteringen
+        if text:
+            self.demo.preliminar(text)
 
     def drain(self):
         """Väntar tills alla köade fraser är klara (tester och avslut)."""
         self.jobs.join()
+
+    def _demo_lage(self, lyssnar):
+        if self.demo:
+            self.demo.lage(lyssnar)
 
     def _start(self):
         if self.recording:
@@ -355,6 +395,8 @@ class Bridge:
         self.recorder.start()
         self.recording = True
         self.text_seen = False
+        self.demo_nasta = 0.0
+        self._demo_lage(True)
         self.busy_sent = False
         self.log("lyft: lyssnar")
 
@@ -363,6 +405,7 @@ class Bridge:
             return
         self.recorder.stop()
         self.recording = False
+        self._demo_lage(False)
         pcm = trimma_svans(self.recorder.take(), self.recorder.rate, self.trim_tail_ms)
         for segment in self.seg.push(pcm):
             self._enqueue(segment)
@@ -672,6 +715,9 @@ def bygg_argparser():
     ap.add_argument("--type-delay-ms", type=float, default=20, help="paus mellan tecken vid skrivning")
     ap.add_argument("--test-press", type=float, metavar="SEK",
                     help="emulera ett knapptryck på SEK sekunder via PRESS/RELEASE och avsluta (test utan lödd knapp)")
+    ap.add_argument("--demo", action="store_true",
+                    help="visa det du säger som levande undertext i webbläsaren")
+    ap.add_argument("--demo-port", type=int, default=8790)
     ap.add_argument("--engine", choices=("whisper", "pianissimo"), default="whisper",
                     help="transkriberare; pianissimo är en svensk FastConformer "
                          "som inte hittar på text ur tystnad (endast svenska)")
@@ -712,6 +758,12 @@ def main():
     log = lambda *a: print(time.strftime("%H:%M:%S"), *a, flush=True)
     log(f"taligenkänning: språk={args.language}, modell={os.path.basename(args.model)}, port={args.port}")
     typer = PrintTyper() if args.dry_run else PynputTyper(delay_ms=args.type_delay_ms)
+    skarm = None
+    if args.demo:
+        import demo as demomodul
+        skarm = demomodul.Demoskarm(port=args.demo_port, log=log).starta()
+        skarm.lage(False, kalla="bordstelefon" if args.multicast else "Pico-mick")
+        typer = demomodul.DemoTyper(typer, skarm)
     if not args.dry_run:
         from Quartz import CGPreflightPostEventAccess
         log(f"tangentbordsbehörighet: {'OK' if CGPreflightPostEventAccess() else 'SAKNAS'}")
@@ -733,7 +785,7 @@ def main():
                         long_silence_ms=int(args.long_pause * 1000))
         bridge = Bridge(link, recorder, server, typer, trailing_space=not args.no_trailing_space, log=log,
                         sounds=not args.no_sounds, segmenter=seg, enter_on_hangup=not args.no_enter,
-                        trim_tail_ms=args.trim_tail_ms)
+                        trim_tail_ms=args.trim_tail_ms, demo=skarm)
         if args.multicast:
             log(f"klar: lyssnar på {args.multicast_grupp}:{args.multicast_port} "
                 f"från {args.multicast_kalla}. Lyft luren och tryck paging-knappen.")
