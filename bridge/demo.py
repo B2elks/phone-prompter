@@ -14,6 +14,7 @@ en skärm kan byta ut ett ord, ett tangentbord kan inte ta tillbaka det.
 import json
 import queue
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -37,6 +38,10 @@ class Demoskarm:
         self.senaste_lage = {"lyssnar": False, "kalla": ""}
         # Pågående fras, så en flik som öppnas mitt i en mening ser den.
         self.senaste_text = None
+        # Har demofliken tangentbordsfokus? Då ska texten inte knappas in —
+        # den hade hamnat i webbläsaren i stället för där man arbetar.
+        self._fokus_till = 0.0
+        self.fokus_giltig_s = 6.0
 
     # --- händelser in från bryggan
     def preliminar(self, text):
@@ -63,6 +68,17 @@ class Demoskarm:
                 except queue.Full:
                     pass          # flik som inte hänger med tappar hellre en bild
 
+    def satt_fokus(self, pa):
+        """Sidan säger till när den får och tappar fokus.
+
+        Tiden är en spärr: stängs fliken utan att hinna säga ifrån slutar
+        fokus gälla av sig självt, så utskriften aldrig dör tyst.
+        """
+        self._fokus_till = (time.monotonic() + self.fokus_giltig_s) if pa else 0.0
+
+    def har_fokus(self):
+        return time.monotonic() < self._fokus_till
+
     # --- server
     def starta(self):
         skarm = self
@@ -76,6 +92,11 @@ class Demoskarm:
             def do_GET(self):
                 if self.path.startswith("/handelser"):
                     self._strom()
+                elif self.path.startswith("/fokus"):
+                    skarm.satt_fokus(self.path.endswith("=1"))
+                    self.send_response(204)
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
                 elif self.path in ("/", "/index.html"):
                     self._sida()
                 else:
@@ -151,7 +172,9 @@ class DemoTyper:
 
     def type(self, text):
         self.skarm.slutlig(text.strip())
-        self.inre.type(text)
+        # Ligger fokus i demofliken skulle tangenttrycken hamna där.
+        if not self.skarm.har_fokus():
+            self.inre.type(text)
 
     def __getattr__(self, namn):
         return getattr(self.inre, namn)

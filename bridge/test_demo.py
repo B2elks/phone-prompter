@@ -250,3 +250,48 @@ class PreliminarTradTest(unittest.TestCase):
         b._demo_preliminar()
         time.sleep(0.7)
         self.assertEqual(modell.anrop, 1, "startade ett andra anrop för tidigt")
+
+
+class FokusTest(unittest.TestCase):
+    """Texten får inte knappas in i demoskärmen.
+
+    Tittar man på demot har webbläsaren fokus, och tangenttrycken hamnar
+    där i stället för i programmet man arbetar i. Sidan känner sitt eget
+    fokus och säger till; bryggan hoppar då över utskriften.
+    """
+
+    def setUp(self):
+        self.skarm = demo.Demoskarm(port=0, log=lambda *a: None)
+        self.inre = Fangare()
+        self.typer = demo.DemoTyper(self.inre, self.skarm)
+
+    def test_skriver_som_vanligt_utan_fokus(self):
+        self.typer.type("hej ")
+        self.assertEqual(self.inre.skrivet, ["hej "])
+
+    def test_skriver_inte_nar_demot_har_fokus(self):
+        self.skarm.satt_fokus(True)
+        self.typer.type("hej ")
+        self.assertEqual(self.inre.skrivet, [])
+
+    def test_visas_pa_skarmen_anda(self):
+        # Poängen med demot kvarstår: texten ska synas där.
+        self.skarm.satt_fokus(True)
+        self.typer.type("hej ")
+        self.assertEqual(self.skarm.senaste_text, ("slutlig", "hej"))
+
+    def test_skriver_igen_nar_fokus_slapps(self):
+        self.skarm.satt_fokus(True)
+        self.typer.type("ett ")
+        self.skarm.satt_fokus(False)
+        self.typer.type("två ")
+        self.assertEqual(self.inre.skrivet, ["två "])
+
+    def test_gammalt_fokus_slutar_galla(self):
+        # Om fliken stängs utan att säga till får utskriften inte dö tyst.
+        import time
+        self.skarm.fokus_giltig_s = 0.2
+        self.skarm.satt_fokus(True)
+        time.sleep(0.35)
+        self.typer.type("hej ")
+        self.assertEqual(self.inre.skrivet, ["hej "])

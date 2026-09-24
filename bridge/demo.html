@@ -32,7 +32,7 @@ html, body {
 
 body {
   display: grid;
-  grid-template-rows: 1fr auto auto auto;
+  grid-template-rows: 1fr auto auto auto auto;
   padding: 4vh 5vw 0;
 }
 
@@ -111,6 +111,16 @@ body {
 }
 #tomt[hidden] { display: none; }
 
+/* Syns bara när fliken har fokus och utskriften därför pausar. */
+#fokusnotis {
+  margin: 0;
+  padding: 0 0 1.4vh;
+  font-size: clamp(.85rem, 1.4vw, 1.1rem);
+  color: var(--rattad);
+  max-width: 44ch;
+}
+#fokusnotis[hidden] { display: none; }
+
 #status {
   border-top: 1px solid var(--rad);
   padding: 1.1rem 0 1.4rem;
@@ -149,6 +159,8 @@ body {
 <div id="historik"></div>
 <div id="aktuell" aria-live="polite"></div>
 <p id="tomt">Lyft luren och prata. Orden dyker upp här.</p>
+<p id="fokusnotis" hidden>Texten knappas inte in medan det här fönstret är
+framme. Klicka i programmet du skriver i.</p>
 
 <div id="status">
   <span id="lage" data-lyssnar="nej"><span id="prick"></span>väntar på ljud</span>
@@ -215,6 +227,24 @@ function arkivera(text) {
   visade = [];
   visa_tomt_lage();
 }
+
+/* Säg till bryggan när den här fliken har tangentbordsfokus. Annars
+   knappas texten in här i stället för i programmet du arbetar i.
+   Pingas medan fokus ligger kvar, så en stängd flik inte låser utskriften. */
+let fokusping = null;
+function meddela_fokus(pa) {
+  fetch("/fokus?pa=" + (pa ? 1 : 0), {keepalive: true}).catch(() => {});
+  const notis = document.getElementById("fokusnotis");
+  if (notis) notis.hidden = !pa;
+  clearInterval(fokusping);
+  if (pa) fokusping = setInterval(() => meddela_fokus(true), 3000);
+}
+addEventListener("focus", () => meddela_fokus(true));
+addEventListener("blur", () => meddela_fokus(false));
+addEventListener("pagehide", () => meddela_fokus(false));
+document.addEventListener("visibilitychange",
+  () => meddela_fokus(document.visibilityState === "visible" && document.hasFocus()));
+meddela_fokus(document.hasFocus());
 
 const strom = new EventSource("/handelser");
 
