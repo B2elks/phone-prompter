@@ -777,7 +777,7 @@ def main():
         import demo as demomodul
         skarm = demomodul.Demoskarm(port=args.demo_port, log=log).starta()
         skarm.lage(False, kalla="bordstelefon" if args.multicast else "Pico-mick")
-        typer = demomodul.DemoTyper(typer, skarm)
+        typer = demomodul.DemoTyper(typer, skarm, log=log)
     if not args.dry_run:
         from Quartz import CGPreflightPostEventAccess
         log(f"tangentbordsbehörighet: {'OK' if CGPreflightPostEventAccess() else 'SAKNAS'}")

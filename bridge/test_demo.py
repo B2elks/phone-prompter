@@ -295,3 +295,22 @@ class FokusTest(unittest.TestCase):
         time.sleep(0.35)
         self.typer.type("hej ")
         self.assertEqual(self.inre.skrivet, ["hej "])
+
+
+class FokusLoggTest(unittest.TestCase):
+    """Utskrift som hoppas över tyst går inte att felsöka."""
+
+    def test_loggar_nar_utskriften_hoppas_over(self):
+        rader = []
+        skarm = demo.Demoskarm(port=0, log=lambda *a: None)
+        skarm.satt_fokus(True)
+        t = demo.DemoTyper(Fangare(), skarm, log=lambda *a: rader.append(" ".join(map(str, a))))
+        t.type("hej ")
+        self.assertTrue(any("demo" in r.lower() for r in rader), f"inget loggat: {rader}")
+
+    def test_tyst_nar_utskriften_sker(self):
+        rader = []
+        skarm = demo.Demoskarm(port=0, log=lambda *a: None)
+        t = demo.DemoTyper(Fangare(), skarm, log=lambda *a: rader.append(" ".join(map(str, a))))
+        t.type("hej ")
+        self.assertEqual(rader, [], "loggade fast inget hoppades över")

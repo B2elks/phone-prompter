@@ -166,15 +166,19 @@ class DemoTyper:
     Bryggan vet inget om demot — den anropar type() som vanligt.
     """
 
-    def __init__(self, inre, skarm):
+    def __init__(self, inre, skarm, log=print):
         self.inre = inre
         self.skarm = skarm
+        self.log = log
 
     def type(self, text):
         self.skarm.slutlig(text.strip())
         # Ligger fokus i demofliken skulle tangenttrycken hamna där.
-        if not self.skarm.har_fokus():
-            self.inre.type(text)
+        if self.skarm.har_fokus():
+            # Tyst bortfall är omöjligt att felsöka; säg varför.
+            self.log("demoskärmen har fokus — texten skrevs inte in")
+            return
+        self.inre.type(text)
 
     def __getattr__(self, namn):
         return getattr(self.inre, namn)
